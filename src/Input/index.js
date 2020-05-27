@@ -42,7 +42,9 @@ export default function Input({
       />
     );
   } else {
-    child = <div>{textToDisplay(text)}</div>;
+    child = (
+      <div dangerouslySetInnerHTML={{ __html: textToDisplay(text) }}></div>
+    );
   }
 
   return (
@@ -53,5 +55,18 @@ export default function Input({
 }
 
 function textToDisplay(text) {
-  return text;
+  return text.split("").reduce(
+    ({ content, ul }, next) => {
+      if (next === "*" && !ul) {
+        return { content: content + "<ul><li>", ul: true };
+      } else if (next === "\n" && ul) {
+        return { content: content + "</li></ul><br>", ul: false };
+      } else if (next === "\n") {
+        return { content: content + "<br>" + next, ul: false };
+      }
+
+      return { content: content + next, ul: ul };
+    },
+    { content: "", ul: false }
+  ).content;
 }
