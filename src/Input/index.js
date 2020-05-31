@@ -14,7 +14,7 @@ function fieldReducer(
     text: "*",
     cursor: 0,
   },
-  { type, code, position, value }
+  { type, code, position, value, shift }
 ) {
   switch (type) {
     case VALUE_CHANGE:
@@ -31,7 +31,7 @@ function fieldReducer(
           text: `${start}\n${" ".repeat(indent)}*${end}`,
           cursor: position + indent + 2,
         };
-      } else if (code === TAB_KEY_CODE) {
+      } else if (code === TAB_KEY_CODE && !shift) {
         const lineStart = lineStartPosition(text, position);
         const start = text.substring(0, lineStart);
         const end = text.substring(lineStart);
@@ -45,12 +45,28 @@ function fieldReducer(
         } else {
           return { text, cursor };
         }
+      } else if (code === TAB_KEY_CODE && shift) {
+        const currentIndentation = currentLineIndetation(text, position);
+        if (currentIndentation === 0) {
+          return { text, cursor };
+        }
+        const lineStart = lineStartPosition(text, position);
+        const start = text.substring(0, lineStart);
+        const end = text.substring(lineStart);
+        return {
+          text: `${start}${unindent(end)}`,
+          cursor: position - 2,
+        };
       } else {
         return { text, cursor };
       }
     default:
       return { text, cursor };
   }
+}
+
+function unindent(line) {
+  return line.replace("  ", "");
 }
 
 function previousLineIndentation(text, position) {
@@ -83,6 +99,10 @@ function currentLineUntilCursor(text, position) {
   const untilNow = text.substring(0, position);
   const previousLineEnd = untilNow.lastIndexOf("\n");
   return untilNow.substring(previousLineEnd + 1, position);
+}
+
+function removeFirstStar(line) {
+  return line.replace("*", "");
 }
 
 export default function Input({
@@ -120,6 +140,7 @@ export default function Input({
               type: KEY_PRESSED,
               code: e.keyCode,
               position: e.target.selectionStart,
+              shift: e.shiftKey,
             });
           }
 
@@ -131,6 +152,7 @@ export default function Input({
       />
     );
   } else {
+    console.log("display", textToDisplay(text));
     child = (
       <div dangerouslySetInnerHTML={{ __html: textToDisplay(text) }}></div>
     );
@@ -144,9 +166,27 @@ export default function Input({
 }
 
 function textToDisplay(text) {
-  return text.split("").reduce(
-    ({ content, ul }, next) => {
-      if (next === "*" && !ul) {
+  return (
+    text.split("\n").reduce(
+      ({ content, ul }, line) => {
+        console.log("line", line);
+        const indentation = currentLineIndetation(line, line.length - 1);
+        console.log("indentation", indentation);
+        let cleanedLine = removeFirstStar(line);
+        if (indentation / 2 > ul) {
+          return {
+            content: `${content}<ul><li>${cleanedLine}</li>`,
+            ul: ul + 1,
+          };
+        } else if (indentation / 2 < ul) {
+          return {
+            content: `${content}</ul><li>${cleanedLine}</li>`,
+            ul: ul - 1,
+          };
+        } else {
+          return { content: `${content}<li>${cleanedLine}</li>`, ul: ul };
+        }
+        /*if (next === "*" && !ul) {
         return { content: content + "<ul><li>", ul: true };
       } else if (next === "\n" && ul) {
         return { content: content + "</li></ul><br>", ul: false };
@@ -154,8 +194,9 @@ function textToDisplay(text) {
         return { content: content + "<br>" + next, ul: false };
       }
 
-      return { content: content + next, ul: ul };
-    },
-    { content: "", ul: false }
-  ).content;
+      return { content: content + next, ul: ul };*/
+      },
+      { content: "<ul>", ul: 0 }
+    ).content + "</ul>"
+  );
 }
