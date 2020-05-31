@@ -11,7 +11,7 @@ const KEY_CODE_LIST = [TAB_KEY_CODE, ENTER_TAB_CODE];
 
 function fieldReducer(
   { text, cursor } = {
-    text: "",
+    text: "*",
     cursor: 0,
   },
   { type, code, position, value }
@@ -24,29 +24,27 @@ function fieldReducer(
       };
     case KEY_PRESSED:
       if (code === ENTER_TAB_CODE) {
-        const untilNow = text.substring(0, position);
-        const previousLineEnd = untilNow.lastIndexOf("\n");
-
-        let indent = 0;
-        const line = untilNow.substring(previousLineEnd + 1, position);
-        for (let i = 0; i < line.length; i++, indent++) {
-          if (line[i] !== " ") {
-            break;
-          }
-        }
+        const indent = currentLineIndetation(text, position);
         const start = text.substring(0, position + 1);
         const end = text.substring(position + 1);
         return {
-          text: `${start}\n${" ".repeat(indent)}${end}`,
-          cursor: position + indent + 1,
+          text: `${start}\n${" ".repeat(indent)}*${end}`,
+          cursor: position + indent + 2,
         };
       } else if (code === TAB_KEY_CODE) {
-        const start = text.substring(0, position);
-        const end = text.substring(position);
-        return {
-          text: start + "  " + end,
-          cursor: position + 2,
-        };
+        const lineStart = lineStartPosition(text, position);
+        const start = text.substring(0, lineStart);
+        const end = text.substring(lineStart);
+        const currentIndentation = currentLineIndetation(text, position);
+        const previousIndentation = previousLineIndentation(text, position);
+        if (currentIndentation <= previousIndentation) {
+          return {
+            text: `${start}  ${end}`,
+            cursor: position + 2,
+          };
+        } else {
+          return { text, cursor };
+        }
       } else {
         return { text, cursor };
       }
@@ -55,10 +53,42 @@ function fieldReducer(
   }
 }
 
+function previousLineIndentation(text, position) {
+  const lineStart = lineStartPosition(text, position);
+  const previousLineStart = lineStart - 1;
+  if (previousLineStart === -1) {
+    return 0;
+  }
+
+  return currentLineIndetation(text, previousLineStart);
+}
+
+function currentLineIndetation(text, position) {
+  let indent = 0;
+  const line = currentLineUntilCursor(text, position);
+  for (let i = 0; i < line.length; i++, indent++) {
+    if (line[i] !== " ") {
+      break;
+    }
+  }
+  return indent;
+}
+
+function lineStartPosition(text, position) {
+  const untilNow = text.substring(0, position);
+  return untilNow.lastIndexOf("\n") + 1;
+}
+
+function currentLineUntilCursor(text, position) {
+  const untilNow = text.substring(0, position);
+  const previousLineEnd = untilNow.lastIndexOf("\n");
+  return untilNow.substring(previousLineEnd + 1, position);
+}
+
 export default function Input({
   edit = false,
   onClick = () => {},
-  text: currentText = "",
+  text: currentText = "*",
 }) {
   const ref = createRef();
   let [{ text, cursor }, dispatch] = useReducer(fieldReducer, {
