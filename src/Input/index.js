@@ -1,41 +1,100 @@
-import React, { useState, createRef, useEffect } from "react";
+import React, { createRef, useReducer, useEffect } from "react";
 import "./Input.css";
 
 const TAB_KEY_CODE = 9;
+const ENTER_TAB_CODE = 13;
+const KEY_PRESSED = "KEY_PRESSED";
+const VALUE_CHANGE = "VALUE_CHANGE";
+
+const KEY_PROPAGATION_BLACKLIST = [TAB_KEY_CODE, ENTER_TAB_CODE];
+const KEY_CODE_LIST = [TAB_KEY_CODE, ENTER_TAB_CODE];
+
+function fieldReducer(
+  { text, cursor } = {
+    text: "",
+    cursor: 0,
+  },
+  { type, code, position, value }
+) {
+  switch (type) {
+    case VALUE_CHANGE:
+      return {
+        text: value,
+        cursor: position,
+      };
+    case KEY_PRESSED:
+      if (code === ENTER_TAB_CODE) {
+        const untilNow = text.substring(0, position);
+        const previousLineEnd = untilNow.lastIndexOf("\n");
+
+        let indent = 0;
+        const line = untilNow.substring(previousLineEnd + 1, position);
+        for (let i = 0; i < line.length; i++, indent++) {
+          if (line[i] !== " ") {
+            break;
+          }
+        }
+        const start = text.substring(0, position + 1);
+        const end = text.substring(position + 1);
+        return {
+          text: `${start}\n${" ".repeat(indent)}${end}`,
+          cursor: position + indent + 1,
+        };
+      } else if (code === TAB_KEY_CODE) {
+        const start = text.substring(0, position);
+        const end = text.substring(position);
+        return {
+          text: start + "  " + end,
+          cursor: position + 2,
+        };
+      } else {
+        return { text, cursor };
+      }
+    default:
+      return { text, cursor };
+  }
+}
 
 export default function Input({
   edit = false,
   onClick = () => {},
   text: currentText = "",
 }) {
-  let [text, setText] = useState(currentText);
-  let [cursor, setCursor] = useState(-1);
   const ref = createRef();
+  let [{ text, cursor }, dispatch] = useReducer(fieldReducer, {
+    text: currentText,
+  });
+
   useEffect(() => {
-    if (ref && ref.current && cursor > -1) {
-      ref.current.selectionStart = ref.current.selectionEnd = cursor;
+    if (ref.current && cursor !== ref.current.selectionStart) {
+      ref.current.selectionStart = cursor;
+      ref.current.selectionEnd = cursor;
     }
   }, [cursor, ref]);
 
   let child;
   if (edit) {
-    console.log("focus");
     child = (
       <textarea
         ref={ref}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          dispatch({
+            type: VALUE_CHANGE,
+            value: e.target.value,
+            position: e.target.selectionStart,
+          });
+        }}
         onKeyDown={(e) => {
-          const field = e.target;
+          if (KEY_CODE_LIST.includes(e.keyCode)) {
+            dispatch({
+              type: KEY_PRESSED,
+              code: e.keyCode,
+              position: e.target.selectionStart,
+            });
+          }
 
-          if (e.keyCode === TAB_KEY_CODE) {
-            const start = field.selectionStart;
-            setText(text.substring(0, start) + "  " + text.substring(start));
-            setCursor(start + 2);
-            //field.selectionStart = field.selectionEnd = start + 1;
-
+          if (KEY_PROPAGATION_BLACKLIST.includes(e.keyCode)) {
             e.preventDefault();
-          } else {
-            setCursor(-1);
           }
         }}
         value={text}
