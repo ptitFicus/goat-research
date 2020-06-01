@@ -1,19 +1,15 @@
-import React, { useState } from "react";
+import React from "react";
+import { Route } from "naive-router";
 import "./App.css";
-import Input from "./Input";
+import Page from "./Page";
 
 function App() {
-  const [edit, setEdit] = useState(false);
   return (
-    <div className="App" onClick={() => setEdit(false)}>
+    <div className="App">
       <h1>Goat Research</h1>
-      <Input
-        edit={edit}
-        onClick={(e) => {
-          e.stopPropagation();
-          setEdit(true);
-        }}
-      />
+      <Route path="/keyword/{keyword}">
+        {({ keyword }) => <Page name={keyword} />}
+      </Route>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { createRef, useReducer, useEffect } from "react";
+import React, { createRef, useReducer, useEffect, useState } from "react";
 import "./Input.css";
 
 const TAB_KEY_CODE = 9;
@@ -65,10 +65,6 @@ function fieldReducer(
   }
 }
 
-function isLastLine(text, cursor) {
-  return text.substring(cursor).includes("\n");
-}
-
 function unindent(line) {
   return line.replace("  ", "");
 }
@@ -109,11 +105,7 @@ function removeFirstStar(line) {
   return line.replace("*", "");
 }
 
-export default function Input({
-  edit = false,
-  onClick = () => {},
-  text: currentText = "*",
-}) {
+export default function Input({ text: currentText, onChange = () => {} }) {
   const ref = createRef();
   let [{ text, cursor }, dispatch] = useReducer(fieldReducer, {
     text: currentText,
@@ -125,6 +117,25 @@ export default function Input({
       ref.current.selectionEnd = cursor;
     }
   }, [cursor, ref]);
+
+  const [edit, setEdit] = useState(false);
+
+  useEffect(() => {
+    const callback = () => {
+      setEdit(false);
+    };
+    document.addEventListener("click", callback);
+
+    return () => document.removeEventListener("click", callback);
+  }, []);
+
+  useEffect(() => {
+    onChange(text);
+  }, [text, onChange]);
+
+  useEffect(() => {
+    dispatch({ type: VALUE_CHANGE, value: currentText });
+  }, [currentText]);
 
   let child;
   if (edit) {
@@ -156,14 +167,21 @@ export default function Input({
       />
     );
   } else {
-    console.log("display", textToDisplay(text));
     child = (
       <div dangerouslySetInnerHTML={{ __html: textToDisplay(text) }}></div>
     );
   }
 
   return (
-    <div className="Input" onClick={onClick}>
+    <div
+      className="Input"
+      onClick={(e) => {
+        e.stopPropagation();
+        // https://stackoverflow.com/questions/24415631/reactjs-syntheticevent-stoppropagation-only-works-with-react-events
+        e.nativeEvent.stopImmediatePropagation();
+        setEdit(true);
+      }}
+    >
       {child}
     </div>
   );
@@ -173,9 +191,7 @@ function textToDisplay(text) {
   return (
     text.split("\n").reduce(
       ({ content, ul }, line) => {
-        console.log("line", line);
         const indentation = currentLineIndetation(line, line.length - 1);
-        console.log("indentation", indentation);
         let cleanedLine = removeFirstStar(line);
         if (indentation / 2 > ul) {
           return {
@@ -190,15 +206,6 @@ function textToDisplay(text) {
         } else {
           return { content: `${content}<li>${cleanedLine}</li>`, ul: ul };
         }
-        /*if (next === "*" && !ul) {
-        return { content: content + "<ul><li>", ul: true };
-      } else if (next === "\n" && ul) {
-        return { content: content + "</li></ul><br>", ul: false };
-      } else if (next === "\n") {
-        return { content: content + "<br>" + next, ul: false };
-      }
-
-      return { content: content + next, ul: ul };*/
       },
       { content: "<ul>", ul: 0 }
     ).content + "</ul>"
