@@ -192,7 +192,7 @@ function textToDisplay(text) {
     text.split("\n").reduce(
       ({ content, ul }, line) => {
         const indentation = currentLineIndetation(line, line.length - 1);
-        let cleanedLine = removeFirstStar(line);
+        let cleanedLine = replacePageReferences(removeFirstStar(line));
         if (indentation / 2 > ul) {
           return {
             content: `${content}<ul><li>${cleanedLine}</li>`,
@@ -210,4 +210,12 @@ function textToDisplay(text) {
       { content: "<ul>", ul: 0 }
     ).content + "</ul>"
   );
+}
+
+function replacePageReferences(str) {
+  const regexp = /\[(?<pageName>.+?)\]/g;
+
+  return str.replace(regexp, function (matched, pageName) {
+    return `<a href="/keyword/${pageName}">${pageName}</a>`;
+  });
 }
