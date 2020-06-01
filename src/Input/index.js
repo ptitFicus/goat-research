@@ -25,8 +25,8 @@ function fieldReducer(
     case KEY_PRESSED:
       if (code === ENTER_TAB_CODE) {
         const indent = currentLineIndetation(text, position);
-        const start = text.substring(0, position + 1);
-        const end = text.substring(position + 1);
+        const start = text.substring(0, position);
+        const end = text.substring(position);
         return {
           text: `${start}\n${" ".repeat(indent)}*${end}`,
           cursor: position + indent + 2,
@@ -63,6 +63,10 @@ function fieldReducer(
     default:
       return { text, cursor };
   }
+}
+
+function isLastLine(text, cursor) {
+  return text.substring(cursor).includes("\n");
 }
 
 function unindent(line) {
