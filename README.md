@@ -2,5 +2,5 @@
 
 ## TODO
 
-- [ ] Force "\*" to be present
+- [ ] Force "\*" to be present (correct backpasce handling)
 - [ ] Prevent manual space insertion before "\*"
