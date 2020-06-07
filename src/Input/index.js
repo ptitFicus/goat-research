@@ -5,6 +5,7 @@ const TAB_KEY_CODE = 9;
 const ENTER_TAB_CODE = 13;
 const KEY_PRESSED = "KEY_PRESSED";
 const VALUE_CHANGE = "VALUE_CHANGE";
+const LINK_REGEXP = /\[(?<pageName>.+?)\]/g;
 
 const KEY_PROPAGATION_BLACKLIST = [TAB_KEY_CODE, ENTER_TAB_CODE];
 const KEY_CODE_LIST = [TAB_KEY_CODE, ENTER_TAB_CODE];
@@ -120,14 +121,20 @@ export default function Input({ text: currentText, onChange = () => {} }) {
 
   const [edit, setEdit] = useState(false);
 
+  const textRef = createRef();
+  useEffect(() => {
+    textRef.current = text;
+  }, [text, textRef]);
+
   useEffect(() => {
     const callback = () => {
+      saveRefs(textRef.current);
       setEdit(false);
     };
     document.addEventListener("click", callback);
 
     return () => document.removeEventListener("click", callback);
-  }, []);
+  }, [textRef]);
 
   useEffect(() => {
     onChange(text);
@@ -187,35 +194,137 @@ export default function Input({ text: currentText, onChange = () => {} }) {
   );
 }
 
-function textToDisplay(text) {
-  return (
-    text.split("\n").reduce(
-      ({ content, ul }, line) => {
-        const indentation = currentLineIndetation(line, line.length - 1);
-        let cleanedLine = replacePageReferences(removeFirstStar(line));
-        if (indentation / 2 > ul) {
-          return {
-            content: `${content}<ul><li>${cleanedLine}</li>`,
-            ul: ul + 1,
-          };
-        } else if (indentation / 2 < ul) {
-          return {
-            content: `${content}</ul><li>${cleanedLine}</li>`,
-            ul: ul - 1,
-          };
-        } else {
-          return { content: `${content}<li>${cleanedLine}</li>`, ul: ul };
+function saveRefs(text) {
+  console.log("Saving refs for text", text);
+  const tree = buildSyntaxicTree(text);
+  console.log("Tree", tree);
+}
+
+function buildSyntaxicTree(text) {
+  const rootNode = { children: [], parent: null, pageReferences: new Set() };
+  const leaf = text.split("\n").reduce(
+    ({ currentLevel, node }, line) => {
+      const indentation = currentLineIndetation(line, line.length - 1);
+      const level = indentation / 2;
+      let newNode = { text: line };
+      if (level === currentLevel) {
+        const parent = node.parent;
+        newNode = { ...newNode, parent, children: [] };
+        parent.children.push(newNode);
+      } else if (level < currentLevel) {
+        const parent = node.parent.parent;
+        newNode = { ...newNode, parent, children: [] };
+        parent.children.push(newNode);
+      } else if (level > currentLevel) {
+        const diff = level - currentLevel;
+        newNode = { ...newNode, parent: node, children: [] };
+        node.children.push(newNode);
+        for (let i = diff - 1; i > 0; i--) {
+          // -1 parce qu'on est déjà remonté d'un cran
+          newNode.parent = newNode.parent.parent;
         }
-      },
-      { content: "<ul>", ul: 0 }
-    ).content + "</ul>"
+      }
+
+      newNode.pageReferences = extractPageReferences(line);
+      const parentPageReferences = listParentPageReferences(newNode);
+      parentPageReferences.forEach((e) => newNode.pageReferences.delete(e));
+
+      return { currentLevel: level, node: newNode };
+    },
+    { currentLevel: -1, node: rootNode }
   );
+
+  let root = leaf.node;
+  for (; root.parent; root = root.parent) {}
+  return root;
+}
+
+function listParentPageReferences(node) {
+  const refs = new Set();
+  for (
+    let currentNode = node.parent;
+    currentNode.parent;
+    currentNode = currentNode.parent
+  ) {
+    currentNode.pageReferences.forEach((e) => refs.add(e));
+  }
+
+  return refs;
+}
+
+function textToDisplay(text) {
+  const result = text.split("\n").reduce(
+    ({ content, ul, pageReferences }, line) => {
+      const indentation = currentLineIndetation(line, line.length - 1);
+      const pageRefs = extractPageReferences(line);
+      let cleanedLine = replacePageReferences(removeFirstStar(line));
+      const ulLevel = indentation / 2;
+      let result;
+      if (ulLevel > ul) {
+        result = {
+          content: `${content}<ul><li>${cleanedLine}</li>`,
+          ul: ul + 1,
+          pageReferences,
+        };
+      } else if (ulLevel < ul) {
+        result = {
+          content: `${content}</ul><li>${cleanedLine}</li>`,
+          ul: ul - 1,
+          pageReferences: clearRefs(pageReferences, ulLevel),
+        };
+      } else {
+        result = {
+          content: `${content}<li>${cleanedLine}</li>`,
+          ul: ul,
+          pageReferences: clearRefs(pageReferences, ulLevel),
+        };
+      }
+
+      [...pageRefs]
+        .filter((ref) => !result.pageReferences[ref])
+        .forEach((ref) => (result.pageReferences[ref] = ulLevel));
+
+      return result;
+    },
+    { content: "<ul>", ul: 0, pageReferences: {} }
+  );
+
+  return result.content + "</ul>";
+}
+
+function clearRefs(pageReferences, currentLevel) {
+  const saveFilter = ([_, level]) => level >= currentLevel;
+  const clearFilter = (el) => !saveFilter(el);
+
+  Object.entries(pageReferences)
+    .filter(saveFilter)
+    .forEach(([name, level]) => {
+      console.log("must save", name);
+    });
+
+  return Object.entries(pageReferences)
+    .filter(clearFilter)
+    .reduce((acc, [key, value]) => {
+      acc[key] = value;
+      return acc;
+    }, {});
+}
+
+function extractPageReferences(str) {
+  let result;
+  const matches = new Set();
+  do {
+    result = LINK_REGEXP.exec(str);
+    if (result) {
+      matches.add(result.groups.pageName);
+    }
+  } while (result);
+
+  return matches;
 }
 
 function replacePageReferences(str) {
-  const regexp = /\[(?<pageName>.+?)\]/g;
-
-  return str.replace(regexp, function (matched, pageName) {
+  return str.replace(LINK_REGEXP, function (matched, pageName) {
     return `<a href="/keyword/${pageName}">${pageName}</a>`;
   });
 }
