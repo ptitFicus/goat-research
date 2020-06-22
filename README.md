@@ -4,5 +4,7 @@
 
 - [ ] Force "\*" to be present (correct backpasce handling)
 - [ ] Prevent manual space insertion before "\*"
-- [ ] pages
-- [ ] commands
+- [x] pages
+- [x] page references
+- [ ] page back references
+- [ ] firebase save
